@@ -29,6 +29,7 @@
 # Allow only these directories
 !airflow
 !common
+!constraints
 !dags
 !dev
 !chart

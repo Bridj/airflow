@@ -33,8 +33,8 @@
 #                        all the build essentials. This makes the image
 #                        much smaller.
 #
-ARG AIRFLOW_VERSION="2.0.0.dev0"
-ARG AIRFLOW_EXTRAS="async,aws,azure,celery,dask,elasticsearch,gcp,kubernetes,mysql,postgres,redis,slack,ssh,statsd,virtualenv"
+ARG AIRFLOW_VERSION="1.10.15"
+ARG AIRFLOW_EXTRAS="async,aws,dask,elasticsearch,mysql,postgres,redis,slack,ssh,statsd,virtualenv"
 ARG ADDITIONAL_AIRFLOW_EXTRAS=""
 ARG ADDITIONAL_PYTHON_DEPS=""
 
@@ -44,8 +44,9 @@ ARG AIRFLOW_GID="50000"
 
 ARG CASS_DRIVER_BUILD_CONCURRENCY="8"
 
-ARG PYTHON_BASE_IMAGE="python:3.6-slim-buster"
-ARG PYTHON_MAJOR_MINOR_VERSION="3.6"
+ARG PYTHON_BASE_IMAGE="birdj-ubuntu-python-38-build:latest"
+ARG PYTHON_BASE_HARDENED_IMAGE="birdj-ubuntu-python-38-hardened:latest"
+ARG PYTHON_MAJOR_MINOR_VERSION="3.8"
 
 ARG PIP_VERSION=20.2.4
 
@@ -101,7 +102,7 @@ ARG DEV_APT_DEPS="\
      nodejs \
      openssh-client \
      postgresql-client \
-     python-selinux \
+     python3-selinux \
      sasl2-bin \
      software-properties-common \
      sqlite3 \
@@ -115,7 +116,7 @@ ARG ADDITIONAL_DEV_APT_DEPS=""
 ENV ADDITIONAL_DEV_APT_DEPS=${ADDITIONAL_DEV_APT_DEPS}
 
 ARG DEV_APT_COMMAND="\
-    curl --fail --location https://deb.nodesource.com/setup_10.x | bash - \
+    curl --fail --location https://deb.nodesource.com/setup_14.x | bash - \
     && curl https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - > /dev/null \
     && echo 'deb https://dl.yarnpkg.com/debian/ stable main' > /etc/apt/sources.list.d/yarn.list"
 ENV DEV_APT_COMMAND=${DEV_APT_COMMAND}
@@ -160,8 +161,9 @@ ARG AIRFLOW_EXTRAS
 ARG ADDITIONAL_AIRFLOW_EXTRAS=""
 ENV AIRFLOW_EXTRAS=${AIRFLOW_EXTRAS}${ADDITIONAL_AIRFLOW_EXTRAS:+,}${ADDITIONAL_AIRFLOW_EXTRAS}
 
-ARG AIRFLOW_CONSTRAINTS_REFERENCE="constraints-master"
-ARG AIRFLOW_CONSTRAINTS_LOCATION="https://raw.githubusercontent.com/apache/airflow/${AIRFLOW_CONSTRAINTS_REFERENCE}/constraints-${PYTHON_MAJOR_MINOR_VERSION}.txt"
+ARG AIRFLOW_CONSTRAINTS_REFERENCE="constraints-1.10.15"
+#ARG AIRFLOW_CONSTRAINTS_LOCATION="https://raw.githubusercontent.com/apache/airflow/${AIRFLOW_CONSTRAINTS_REFERENCE}/constraints-${PYTHON_MAJOR_MINOR_VERSION}.txt"
+ARG AIRFLOW_CONSTRAINTS_LOCATION="/opt/airflow/constraints/constraints.txt"
 ENV AIRFLOW_CONSTRAINTS_LOCATION=${AIRFLOW_CONSTRAINTS_LOCATION}
 
 ENV PATH=${PATH}:/root/.local/bin
@@ -178,25 +180,13 @@ RUN pip install --upgrade "pip==${PIP_VERSION}"
 ARG AIRFLOW_PRE_CACHED_PIP_PACKAGES="false"
 ENV AIRFLOW_PRE_CACHED_PIP_PACKAGES=${AIRFLOW_PRE_CACHED_PIP_PACKAGES}
 
-# In case of Production build image segment we want to pre-install master version of airflow
-# dependencies from GitHub so that we do not have to always reinstall it from the scratch.
-RUN if [[ ${AIRFLOW_PRE_CACHED_PIP_PACKAGES} == "true" ]]; then \
-       if [[ ${INSTALL_MYSQL_CLIENT} != "true" ]]; then \
-          AIRFLOW_EXTRAS=${AIRFLOW_EXTRAS/mysql,}; \
-       fi; \
-       pip install --user \
-          "https://github.com/${AIRFLOW_REPO}/archive/${AIRFLOW_BRANCH}.tar.gz#egg=apache-airflow[${AIRFLOW_EXTRAS}]" \
-          --constraint "${AIRFLOW_CONSTRAINTS_LOCATION}" \
-          && pip uninstall --yes apache-airflow; \
-    fi
-
 # By default we install latest airflow from PyPI so we do not need to copy sources of Airflow
 # but in case of breeze/CI builds we use latest sources and we override those
 # those SOURCES_FROM/TO with "." and "/opt/airflow" respectively
-ARG AIRFLOW_SOURCES_FROM="empty"
+ARG AIRFLOW_SOURCES_FROM="."
 ENV AIRFLOW_SOURCES_FROM=${AIRFLOW_SOURCES_FROM}
 
-ARG AIRFLOW_SOURCES_TO="/empty"
+ARG AIRFLOW_SOURCES_TO="/opt/airflow"
 ENV AIRFLOW_SOURCES_TO=${AIRFLOW_SOURCES_TO}
 
 COPY ${AIRFLOW_SOURCES_FROM} ${AIRFLOW_SOURCES_TO}
@@ -216,7 +206,7 @@ ENV ADDITIONAL_PYTHON_DEPS=${ADDITIONAL_PYTHON_DEPS}
 # Of Airflow. Note That for local source installation you need to have local sources of
 # Airflow checked out together with the Dockerfile and AIRFLOW_SOURCES_FROM and AIRFLOW_SOURCES_TO
 # set to "." and "/opt/airflow" respectively.
-ARG AIRFLOW_INSTALLATION_METHOD="apache-airflow"
+ARG AIRFLOW_INSTALLATION_METHOD="/opt/airflow"
 ENV AIRFLOW_INSTALLATION_METHOD=${AIRFLOW_INSTALLATION_METHOD}
 
 # By default latest released version of airflow is installed (when empty) but this value can be overriden
@@ -299,7 +289,7 @@ LABEL org.apache.airflow.distro="debian" \
 # This is the actual Airflow image - much smaller than the build one. We copy
 # installed Airflow and all it's dependencies from the build image to make it smaller.
 ##############################################################################################
-FROM ${PYTHON_BASE_IMAGE} as main
+FROM ${PYTHON_BASE_HARDENED_IMAGE} as main
 SHELL ["/bin/bash", "-o", "pipefail", "-e", "-u", "-x", "-c"]
 
 ARG AIRFLOW_UID
@@ -346,7 +336,7 @@ ARG RUNTIME_APT_DEPS="\
        gosu \
        krb5-user \
        ldap-utils \
-       libffi6 \
+       libffi7 \
        libsasl2-2 \
        libsasl2-modules \
        libssl1.1 \

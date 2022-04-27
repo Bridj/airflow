@@ -34,7 +34,7 @@ set -euo pipefail
 # Install MySQL client from Oracle repositories (Debian installs mariadb)
 # But only if it is not disabled
 if [[ ${INSTALL_MYSQL_CLIENT:="true"} == "true" ]]; then
-    KEY="A4A9406876FCBD3C456770C88C718D3B5072E1F5"
+    KEY="467B942D3A79BD29"
     readonly KEY
 
     GNUPGHOME="$(mktemp -d)"
